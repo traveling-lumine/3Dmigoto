@@ -284,6 +284,7 @@ struct TextureOverride {
 	int format;
 	int width;
 	int height;
+	int byte_size;
 	float width_multiply;
 	float height_multiply;
 	std::vector<int> iterations;
