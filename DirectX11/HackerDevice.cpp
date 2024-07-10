@@ -2031,9 +2031,9 @@ static void override_resource_desc_common_2d_3d(DescType *desc, TextureOverride 
 }
 
 static void override_resource_desc(D3D11_BUFFER_DESC *desc, TextureOverride *textureOverride) {
-	if (textureOverride->byte_size > desc->ByteWidth) {
-		//LogOverlayW(LOG_WARNING, L"VertexLimitRaise %s %d->%d\n", override->ini_section.c_str(), desc->ByteWidth, textureOverride->byte_size);
-		desc->ByteWidth = textureOverride->byte_size;
+	if (textureOverride->byte_width > desc->ByteWidth) {
+		//LogOverlayW(LOG_WARNING, L"VertexLimitRaise %s %d->%d\n", textureOverride->ini_section.c_str(), desc->ByteWidth, textureOverride->byte_width);
+		desc->ByteWidth = textureOverride->byte_width;
 	}
 }
 static void override_resource_desc(D3D11_TEXTURE1D_DESC *desc, TextureOverride *textureOverride) {}

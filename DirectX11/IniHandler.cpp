@@ -1038,40 +1038,6 @@ bool GetIniBool(const wchar_t *section, const wchar_t *key, bool def, bool *foun
 	return ret;
 }
 
-int GetIniArray(const wchar_t* section, const wchar_t* key, std::vector<float>* ini_array, bool* found, bool warn)
-{
-	int array_len = 0;
-	int array_value_len;
-	float array_value_float;
-
-	if (found)
-		*found = false;
-
-	try {
-		wstringstream array_data(ini_sections.at(section).kv_map.at(key));
-		wstring array_member;
-		while (getline(array_data, array_member, L',')) {
-			swscanf_s(array_member.c_str(), L"%f%n", &array_value_float, &array_value_len);
-			if (array_value_len != wcslen(array_member.c_str())) {
-				if (warn)
-					IniWarning("WARNING: Array of floating point values parse error: %S=%S\n", key, array_data.str());
-			}
-			else {
-				if (found)
-					*found = true;
-				LogInfo("  %S=%f\n", key, array_value_float);
-			}
-			ini_array->push_back(array_value_float);
-		}
-		array_len = ini_array->size();
-	}
-	catch (std::out_of_range) {
-		array_len = 0;
-	}
-
-	return array_len;
-}
-
 static UINT64 GetIniHash(const wchar_t *section, const wchar_t *key, UINT64 def, bool *found)
 {
 	std::string val;
@@ -2691,7 +2657,9 @@ wchar_t *TextureOverrideIniKeys[] = {
 	L"expand_region_copy",
 	L"deny_cpu_read",
 	L"match_priority",
-	L"raise_vertex_limit",
+	L"vertex_limit_raise",
+	L"vertex_stride",
+	L"vertex_limit",
 	TEXTURE_OVERRIDE_FUZZY_MATCHES,
 	TEXTURE_OVERRIDE_DRAW_CALL_MATCHES,
 	NULL
@@ -2857,22 +2825,16 @@ static void parse_texture_override_common(const wchar_t *id, TextureOverride *ov
 	override->width_multiply = GetIniFloat(id, L"width_multiply", 1.0f, NULL);
 	override->height_multiply = GetIniFloat(id, L"height_multiply", 1.0f, NULL);
 
-	std::vector<float> ini_array;
-	GetIniArray(id, L"raise_vertex_limit", &ini_array, NULL, NULL);
-	if (ini_array.size() == 2) {
-		override->byte_size = ini_array[0] * ini_array[1];
-		//LogOverlayW(LOG_WARNING, L"Command VertexLimitRaise %s to %d (=%f*%f)\n", override->ini_section.c_str(), override->byte_size, ini_array[0], ini_array[1]);
+	if (GetIniBool(id, L"vertex_limit_raise", false, NULL) || wcsstr(override->ini_section.c_str(), L"VertexLimitRaise") != 0) {
+		override->byte_width = GetIniInt(id, L"vertex_stride", 0, NULL) * GetIniInt(id, L"vertex_limit", 0, NULL);
+		if (override->byte_width == 0) {
+			override->byte_width = 8388608;
+		}
 	}
 	else {
-		if (wcsstr(override->ini_section.c_str(), L"VertexLimitRaise") != 0) {
-			override->byte_size = 8388608;
-			//LogOverlayW(LOG_WARNING, L"Header VertexLimitRaise %s to %d\n", override->ini_section.c_str(), override->byte_size);
-		}
-		else {
-			override->byte_size = 0;
-		}
+		override->byte_width = 0;
 	}
-
+	
 	if (GetIniString(id, L"Iteration", 0, setting, MAX_PATH))
 	{
 		// TODO: This supports more iterations than the
