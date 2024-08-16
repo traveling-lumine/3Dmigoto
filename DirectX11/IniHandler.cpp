@@ -1053,17 +1053,36 @@ static UINT64 GetIniHash(const wchar_t *section, const wchar_t *key, UINT64 def,
 	if (found)
 		*found = false;
 
-	if (GetIniString(section, key, NULL, &val)) {
-		sscanf_s(val.c_str(), "%16llx%n", &ret, &len);
-		if (len != val.length()) {
-			IniWarning("WARNING: Hash parse error: %S=%s\n", key, val.c_str());
-		} else {
-			if (found)
-				*found = true;
-			LogInfo("  %S=%016llx\n", key, ret);
+	if (!GetIniString(section, key, NULL, &val))
+		return ret;
+
+	sscanf_s(val.c_str(), "%16llx%n", &ret, &len);
+	if (len != val.length()) {
+		std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+		CustomResources::iterator res = customResources.find(converter.from_bytes(val));
+		if (res == customResources.end()) {
+			IniWarning("WARNING: Resource not found: %s\n", val.c_str());
+			return ret;
+		}
+		auto& value = res->second;
+		void* init_data = value.initial_data;
+		if (init_data == NULL) {
+			IniWarning("WARNING: initial_data unallocated");
+			return ret;
+		}
+		size_t init_len = value.initial_data_size;
+		// min is here to prevent too large data being copied
+		std::string init_str((char*)init_data, min(init_len, 20));
+		sscanf_s(init_str.c_str(), "%16llx%n", &ret, &len);
+		if (len != init_str.length()) {
+			IniWarning("WARNING: Hash parse error: %S=%s\n", key, init_str.c_str());
+			return ret;
 		}
 	}
-
+	if (found)
+		*found = true;
+	LogInfo("  %S=%016llx\n", key, ret);
 	return ret;
 }
 
