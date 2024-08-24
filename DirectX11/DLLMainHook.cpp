@@ -200,6 +200,12 @@ static bool verify_intended_target(HINSTANCE our_dll)
 	if (!_wcsicmp(our_path, exe_path))
 		return true;
 
+	// Allow our DLL to load if it's located in directory somewhere inside exe's directory tree
+	// It opens up possibilities for more complex file structure of injector apps
+	if (wcswcs(our_path, exe_path)) {
+		return true;
+	}
+
 	LogHooking("3DMigoto loaded from outside game directory\n"
 	           "Exe directory: \"%S\" basename: \"%S\"\n"
 	           "Our directory: \"%S\" basename: \"%S\"\n",
