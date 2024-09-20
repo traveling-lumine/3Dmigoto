@@ -124,9 +124,9 @@ static void _RunCommandList(CommandList *command_list, CommandListState *state, 
 {
 	CommandList::Commands::iterator i;
 	command_list_profiling_state profiling_state;
-
+	
 	if (state->recursion > MAX_COMMAND_LIST_RECURSION) {
-		LogOverlay(LOG_WARNING, "WARNING: Command list recursion limit exceeded! Circular reference?\n");
+		LogOverlay(LOG_WARNING, "[%ls] Command list recursion limit exceeded! Circular reference?\n", command_list->ini_section.c_str());
 		return;
 	}
 
@@ -381,7 +381,7 @@ bool declare_local_variable(const wchar_t* section, wstring& name,
 	CommandListVariable* var = NULL;
 
 	if (!valid_variable_name(name)) {
-		LogOverlay(LOG_WARNING, "WARNING: Illegal local variable name: [%S] \"%S\"\n", section, name.c_str());
+		LogOverlay(LOG_WARNING, "[%S] Illegal local variable name:  \"%S\"\n", section, name.c_str());
 		return false;
 	}
 
@@ -391,7 +391,7 @@ bool declare_local_variable(const wchar_t* section, wstring& name,
 		// independent scopes (if {local $tmp} else {local $tmp}), but
 		// we won't allow masking a local variable from a parent scope,
 		// because that's usually a bug. Choose a different name son.
-		LogOverlay(LOG_WARNING, "WARNING: Illegal redeclaration of local variable [%S] %S\n", section, name.c_str());
+		LogOverlay(LOG_WARNING, "[%S] Illegal redeclaration of local variable \"%S\"\n", section, name.c_str());
 		return false;
 	}
 
@@ -399,7 +399,7 @@ bool declare_local_variable(const wchar_t* section, wstring& name,
 		// Not making this fatal since this could clash between say a
 		// global in the d3dx.ini and a local variable in another ini.
 		// Just issue a notice in hunting mode and carry on.
-		LogOverlay(LOG_NOTICE, "WARNING: [%S] local %S masks a global variable with the same name\n", section, name.c_str());
+		LogOverlay(LOG_NOTICE, "[%S] Local \"%S\" masks a global variable with the same name\n", section, name.c_str());
 	}
 
 	pre_command_list->static_vars.emplace_front(name, 0.0f, VariableFlags::NONE);
@@ -2158,7 +2158,7 @@ bool CustomShader::compile(char type, wchar_t *filename, const wstring *wname, c
 	}
 
 	if (FAILED(hr)) {
-		LogOverlay(LOG_WARNING, "Error compiling custom shader\n");
+		LogOverlay(LOG_WARNING, "Error compiling custom shader %S\n", wpath);
 		goto err;
 	}
 
@@ -5540,7 +5540,7 @@ bail:
 }
 
 static bool ParseElseCommand(const wchar_t *section,
-		CommandList *pre_command_list, CommandList *post_command_list)
+		CommandList *pre_command_list, CommandList *post_command_list, const wstring* ini_namespace)
 {
 	// Clear deepest scope level to isolate local variables:
 	pre_command_list->scope->front().clear();
@@ -5549,7 +5549,7 @@ static bool ParseElseCommand(const wchar_t *section,
 }
 
 static bool _ParseEndIfCommand(const wchar_t *section,
-		CommandList *command_list, bool post, bool has_nested_else_if = false)
+		CommandList *command_list, const wstring* ini_namespace, bool post, bool has_nested_else_if = false)
 {
 	CommandList::Commands::reverse_iterator rit;
 	IfCommand *if_command;
@@ -5590,7 +5590,7 @@ static bool _ParseEndIfCommand(const wchar_t *section,
 				if_command->post_finalised = true;
 				if_command->has_nested_else_if = has_nested_else_if;
 				if (else_if_command)
-					return _ParseEndIfCommand(section, command_list, post, true);
+					return _ParseEndIfCommand(section, command_list, ini_namespace, post, true);
 				return true;
 			} else if (!post && !if_command->pre_finalised) {
 				// C++ gotcha: reverse_iterator::base() points to the *next* element
@@ -5605,24 +5605,23 @@ static bool _ParseEndIfCommand(const wchar_t *section,
 				if_command->pre_finalised = true;
 				if_command->has_nested_else_if = has_nested_else_if;
 				if (else_if_command)
-					return _ParseEndIfCommand(section, command_list, post, true);
+					return _ParseEndIfCommand(section, command_list, ini_namespace, post, true);
 				return true;
 			}
 		}
 	}
-
-	LogOverlay(LOG_WARNING, "WARNING: [%S] endif missing if\n", section);
+	LogOverlay(LOG_WARNING, "[%ls][%ls] endif missing if\n", ini_namespace, section);
 	return false;
 }
 
 static bool ParseEndIfCommand(const wchar_t *section,
-		CommandList *pre_command_list, CommandList *post_command_list)
+		CommandList *pre_command_list, CommandList *post_command_list, const wstring* ini_namespace)
 {
 	bool ret;
 
-	ret = _ParseEndIfCommand(section, pre_command_list, false);
+	ret = _ParseEndIfCommand(section, pre_command_list, ini_namespace, false);
 	if (post_command_list)
-	    ret = ret && _ParseEndIfCommand(section, post_command_list, true);
+	    ret = ret && _ParseEndIfCommand(section, post_command_list, ini_namespace, true);
 
 	if (ret)
 		pre_command_list->scope->pop_front();
@@ -5641,9 +5640,9 @@ bool ParseCommandListFlowControl(const wchar_t *section, const wstring *line,
 	if (!wcsncmp(line->c_str(), L"else if ", 8))
 		return ParseElseIfCommand(section, line, 8, pre_command_list, post_command_list, ini_namespace);
 	if (!wcscmp(line->c_str(), L"else"))
-		return ParseElseCommand(section, pre_command_list, post_command_list);
+		return ParseElseCommand(section, pre_command_list, post_command_list, ini_namespace);
 	if (!wcscmp(line->c_str(), L"endif"))
-		return ParseEndIfCommand(section, pre_command_list, post_command_list);
+		return ParseEndIfCommand(section, pre_command_list, post_command_list, ini_namespace);
 
 	return false;
 }
@@ -5723,7 +5722,7 @@ bool IfCommand::noop(bool post, bool ignore_cto_pre, bool ignore_cto_post)
 	bool is_static;
 
 	if ((post && !post_finalised) || (!post && !pre_finalised)) {
-		LogOverlay(LOG_WARNING, "WARNING: If missing endif: %S\n", ini_line.c_str());
+		LogOverlay(LOG_WARNING, "[%S] if missing endif\n", ini_line.c_str());
 		return true;
 	}
 
@@ -5750,7 +5749,7 @@ void CommandPlaceholder::run(CommandListState*)
 
 bool CommandPlaceholder::noop(bool post, bool ignore_cto_pre, bool ignore_cto_post)
 {
-	LogOverlay(LOG_WARNING, "WARNING: Command not terminated: %S\n", ini_line.c_str());
+	LogOverlay(LOG_WARNING, "[%S] Command not terminated\n", ini_line.c_str());
 	return true;
 }
 
