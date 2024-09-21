@@ -17,6 +17,7 @@
 #include "nvprofile.h"
 #include "ShaderRegex.h"
 #include "cursor.h"
+#include <chrono>
 
 #include "vector"
 
@@ -743,6 +744,17 @@ static void free_globbing_vector(vector<pcre2_code*> &patterns) {
 		pcre2_code_free(regex);
 }
 
+static string to_utf8(const wstring& wstr) {
+	if (wstr.empty())
+		return string();
+	int len = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, NULL, 0, NULL, NULL);
+	if (len == 0)
+		return string();
+	string utf8_str(len, 0);
+	WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &utf8_str[0], len, NULL, NULL);
+	return utf8_str;
+}
+
 static bool matches_globbing_vector(wchar_t *filename, vector<pcre2_code*> &patterns) {
 	string afilename;
 	pcre2_match_data *md;
@@ -753,8 +765,7 @@ static bool matches_globbing_vector(wchar_t *filename, vector<pcre2_code*> &patt
 	// eliminate all unecessary uses of wchar_t/wstring). Since this is a
 	// filename, it can contain legitimate unicode characters, so we should
 	// convert it properly to UTF8:
-	std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> codec;
-	afilename = codec.to_bytes(filename); // to_bytes = to utf8
+	afilename = to_utf8(filename); // Replaced deprecated wstring_convert with custom optimized function
 
 	for (pcre2_code *regex : patterns) {
 		md = pcre2_match_data_create_from_pattern(regex, NULL);
@@ -852,29 +863,39 @@ void GetIniSection(IniSectionVector **key_vals, const wchar_t *section)
 // Note that it is the only GetIni...() function that does not perform any
 // automatic logging of present values
 int GetIniString(const wchar_t *section, const wchar_t *key, const wchar_t *def,
-		 wchar_t *ret, unsigned size)
+	wchar_t *ret, unsigned size)
 {
 	int rc;
+	bool found = false;
 
-	try {
-		wstring &val = ini_sections.at(section).kv_map.at(key);
-		// Note that we now use wcsncpy_s here with _TRUNCATE rather
-		// than wcscpy_s, because it turns out the later may just kill
-		// us immediately on overflow depending on the invalid
-		// parameter handler (refer to issue #84), and this way we more
-		// closely match the behaviour of GetPrivateProfileString.
-		if (wcsncpy_s(ret, size, val.c_str(), _TRUNCATE)) {
-			// Funky return code of GetPrivateProfileString Not
-			// sure if we depend on this - if we don't I'd like a
-			// nicer return code or to raise an exception.
-			IniWarning("[%S] \"%S=%S\" too long\n", section, key, val.c_str());
-			rc = size - 1;
-		} else {
-			// I'd also rather not have to calculate the string
-			// length if we don't use it
-			rc = (int)wcslen(ret);
+	auto ini_section = ini_sections.find(section);
+
+	// Switch from try-catch to more explicit and efficient checks
+	if (ini_section != ini_sections.end()) {
+		auto& kv_map = ini_section->second.kv_map;
+		auto kv_pair = kv_map.find(key);
+		if (kv_pair != kv_map.end()) {
+			const std::wstring& val = kv_pair->second;
+			// Note that we now use wcsncpy_s here with _TRUNCATE rather
+			// than wcscpy_s, because it turns out the later may just kill
+			// us immediately on overflow depending on the invalid
+			// parameter handler (refer to issue #84), and this way we more
+			// closely match the behaviour of GetPrivateProfileString.
+			if (wcsncpy_s(ret, size, val.c_str(), _TRUNCATE)) {
+				// Funky return code of GetPrivateProfileString Not
+				// sure if we depend on this - if we don't I'd like a
+				// nicer return code or to raise an exception.
+				IniWarning("[%S] \"%S=%S\" too long\n", section, key, val.c_str());
+				rc = size - 1;
+			} else {
+				// I'd also rather not have to calculate the string
+				// length if we don't use it
+				rc = (int)wcslen(ret);
+			}
+			found = true;
 		}
-	} catch (std::out_of_range) {
+	}
+	if (!found) {
 		if (def) {
 			if (wcscpy_s(ret, size, def)) {
 				// If someone passed in a default value that is
@@ -908,10 +929,17 @@ bool GetIniString(const wchar_t *section, const wchar_t *key, const wchar_t *def
 		DoubleBeepExit();
 	}
 
-	try {
-		wret = ini_sections.at(section).kv_map.at(key);
-		found = true;
-	} catch (std::out_of_range) {
+	// Switch from try-catch to more explicit and efficient checks
+	auto ini_section = ini_sections.find(section);
+	if (ini_section != ini_sections.end()) {
+		auto& kv_map = ini_section->second.kv_map;
+		auto kv_pair = kv_map.find(key);
+		if (kv_pair != kv_map.end()) {
+			wret = kv_pair->second;
+			found = true;
+		}
+	}
+	if (!found) {
 		if (def)
 			wret = def;
 		else
@@ -4581,6 +4609,8 @@ static void MarkAllShadersDeferredUnprocessed()
 
 void ReloadConfig(HackerDevice *device)
 {
+	auto start = std::chrono::high_resolution_clock::now();
+
 	HackerContext *mHackerContext = device->GetHackerContext();
 
 	if (G->gWipeUserConfig)
@@ -4650,5 +4680,8 @@ void ReloadConfig(HackerDevice *device)
 		LogOverlay(LOG_DIRE, "BUG: No HackerContext at ReloadConfig - please report this\n");
 	}
 
-	LogOverlayW(LOG_INFO, L"> XXMI configuration reloaded!\n");
+	auto stop = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<float> duration = stop - start;
+
+	LogOverlayW(LOG_INFO, L"> Reloaded config in %.3fs\n", duration.count());
 }
