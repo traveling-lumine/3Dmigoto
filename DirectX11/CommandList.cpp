@@ -126,7 +126,7 @@ static void _RunCommandList(CommandList *command_list, CommandListState *state, 
 	command_list_profiling_state profiling_state;
 	
 	if (state->recursion > MAX_COMMAND_LIST_RECURSION) {
-		LogOverlay(LOG_WARNING, "[%ls] Command list recursion limit exceeded! Circular reference?\n", command_list->ini_section.c_str());
+		LogOverlay(LOG_WARNING, "Command list recursion limit exceeded! Circular reference?\n - [%ls]\n", command_list->ini_section.c_str());
 		return;
 	}
 
@@ -381,7 +381,7 @@ bool declare_local_variable(const wchar_t* section, wstring& name,
 	CommandListVariable* var = NULL;
 
 	if (!valid_variable_name(name)) {
-		LogOverlay(LOG_WARNING, "[%S] Illegal local variable name:  \"%S\"\n", section, name.c_str());
+		LogOverlay(LOG_WARNING, "Illegal local variable name:  \"%S\"\n - [%S]\n", name.c_str(), section);
 		return false;
 	}
 
@@ -391,7 +391,7 @@ bool declare_local_variable(const wchar_t* section, wstring& name,
 		// independent scopes (if {local $tmp} else {local $tmp}), but
 		// we won't allow masking a local variable from a parent scope,
 		// because that's usually a bug. Choose a different name son.
-		LogOverlay(LOG_WARNING, "[%S] Illegal redeclaration of local variable \"%S\"\n", section, name.c_str());
+		LogOverlay(LOG_WARNING, "Illegal redeclaration of local variable \"%S\"\n - [%S]\n", name.c_str(), section);
 		return false;
 	}
 
@@ -399,7 +399,7 @@ bool declare_local_variable(const wchar_t* section, wstring& name,
 		// Not making this fatal since this could clash between say a
 		// global in the d3dx.ini and a local variable in another ini.
 		// Just issue a notice in hunting mode and carry on.
-		LogOverlay(LOG_NOTICE, "[%S] Local \"%S\" masks a global variable with the same name\n", section, name.c_str());
+		LogOverlay(LOG_NOTICE, "Local \"%S\" masks a global variable with the same name\n - [%S]\n", name.c_str(), section);
 	}
 
 	pre_command_list->static_vars.emplace_front(name, 0.0f, VariableFlags::NONE);
@@ -5610,7 +5610,7 @@ static bool _ParseEndIfCommand(const wchar_t *section,
 			}
 		}
 	}
-	LogOverlay(LOG_WARNING, "[%ls][%ls] endif missing if\n", ini_namespace, section);
+	LogOverlay(LOG_WARNING, "Statement \"endif\" missing \"if\"\n - [%ls] @ [%ls]\n", section, ini_namespace);
 	return false;
 }
 
@@ -5722,7 +5722,7 @@ bool IfCommand::noop(bool post, bool ignore_cto_pre, bool ignore_cto_post)
 	bool is_static;
 
 	if ((post && !post_finalised) || (!post && !pre_finalised)) {
-		LogOverlay(LOG_WARNING, "[%S] if missing endif\n", ini_line.c_str());
+		LogOverlay(LOG_WARNING, "Statement \"if\" missing \"endif\":\n - \"%S\"\n", ini_line.c_str());
 		return true;
 	}
 
@@ -5749,7 +5749,7 @@ void CommandPlaceholder::run(CommandListState*)
 
 bool CommandPlaceholder::noop(bool post, bool ignore_cto_pre, bool ignore_cto_post)
 {
-	LogOverlay(LOG_WARNING, "[%S] Command not terminated\n", ini_line.c_str());
+	LogOverlay(LOG_WARNING, "Command not terminated\n - [%S]\n", ini_line.c_str());
 	return true;
 }
 

@@ -412,7 +412,7 @@ static void ParseIniSectionLine(wstring *wline, wstring *section,
 	// behaviour.
 	inserted = ini_sections.emplace(*section, IniSection{}).second;
 	if (!inserted && !allow_duplicate_sections) {
-		IniWarning("[%ls] Duplicate section found: [%S]\n", ini_namespace->c_str(), section->c_str());
+		IniWarning("Duplicate section found\n - [%S]\n", section->c_str());
 		section->clear();
 		*section_vector = NULL;
 		return;
@@ -437,7 +437,7 @@ static void ParseIniSectionLine(wstring *wline, wstring *section,
 		if (*warn_duplicates == 1)
 			*warn_duplicates = 0;
 	} else if (!IsRegularSection(section->c_str())) {
-		IniWarning("[%ls] Unknown section type: [%S]\n", ini_namespace->c_str(), section->c_str());
+		IniWarning("Unknown section type\n - [%S] @ [%ls]\n", section->c_str(), ini_namespace->c_str());
 	}
 
 	if (DoesSectionAllowLinesWithoutEquals(section->c_str()))
@@ -454,12 +454,12 @@ bool check_include_condition(wstring *val, const wstring *ini_namespace)
 	std::transform(sbuf.begin(), sbuf.end(), sbuf.begin(), ::towlower);
 
 	if (!condition.parse(&sbuf, ini_namespace, NULL)) {
-		IniWarning("[%ls] Unable to parse include condition: %S\n", ini_namespace->c_str(), val->c_str());
+		IniWarning("Unable to parse include condition: %S\n - [%ls]\n", val->c_str(), ini_namespace->c_str());
 		return false;
 	}
 
 	if (!condition.static_evaluate(&ret, NULL)) {
-		IniWarning("[%ls] Include condition could not be statically evaluated: %S\n", ini_namespace->c_str(), val->c_str());
+		IniWarning("Include condition could not be statically evaluated: %S\n - [%ls]\n", val->c_str(), ini_namespace->c_str());
 		return false;
 	}
 
@@ -497,7 +497,7 @@ static bool ParseIniPreamble(wstring *wline, wstring *ini_namespace)
 		}
 	}
 
-	IniWarning("[%ls] Entry outside of section: %S\n", ini_namespace->c_str(), wline->c_str());
+	IniWarning("Entry outside of section: %S\n - [%ls]\n", wline->c_str(), ini_namespace->c_str());
 	return true;
 }
 
@@ -510,7 +510,7 @@ static void ParseIniKeyValLine(wstring *wline, wstring *section,
 	bool inserted;
 
 	if (section->empty() || section_vector == NULL) {
-		IniWarning("[%ls] Entry outside of section: %S\n", ini_namespace->c_str(), wline->c_str());
+		IniWarning("Entry outside of section: %S\n - [%ls]\n", wline->c_str(), ini_namespace->c_str());
 		return;
 	}
 
@@ -524,7 +524,7 @@ static void ParseIniKeyValLine(wstring *wline, wstring *section,
 		if (first != wline->npos)
 			val = wline->substr(first);
 		else {
-			IniWarning("[%ls][%ls] No value found for: \"%S\"\n", ini_namespace->c_str(), section->c_str(), wline->c_str());
+			IniWarning("No value found for: \"%S\"\n - [%ls] @ [%ls]\n", wline->c_str(), section->c_str(), ini_namespace->c_str());
 			return;
 		}
 
@@ -542,7 +542,7 @@ static void ParseIniKeyValLine(wstring *wline, wstring *section,
 			// keys within a single section:
 			inserted = ini_sections.at(*section).kv_map.emplace(key, val).second;
 			if ((warn_duplicates == 1) && !inserted && !whitelisted_duplicate_key(section->c_str(), key.c_str())) {
-				IniWarning("[%ls][%ls] Duplicate key found: %S\n", ini_namespace->c_str(), section->c_str(), key.c_str());
+				IniWarning("Duplicate key found: %S\n - [%ls] @ [%ls]\n", key.c_str(), section->c_str(), ini_namespace->c_str());
 			}
 		}
 	} else {
@@ -551,7 +551,7 @@ static void ParseIniKeyValLine(wstring *wline, wstring *section,
 		// we will store it in the section vector structure for the
 		// profile parser to process.
 		if (warn_lines_without_equals) {
-			IniWarning("[%ls][%ls] Malformed line: \"%S\"\n", ini_namespace->c_str(), section->c_str(), wline->c_str());
+			IniWarning("Malformed line: \"%S\"\n - [%ls] @ [%ls]\n", wline->c_str(), section->c_str(), ini_namespace->c_str());
 			return;
 		}
 	}
@@ -885,7 +885,7 @@ int GetIniString(const wchar_t *section, const wchar_t *key, const wchar_t *def,
 				// Funky return code of GetPrivateProfileString Not
 				// sure if we depend on this - if we don't I'd like a
 				// nicer return code or to raise an exception.
-				IniWarning("[%S] \"%S=%S\" too long\n", section, key, val.c_str());
+				IniWarning("\"%S=%S\" too long\n - [%S]\n", key, val.c_str(), section);
 				rc = size - 1;
 			} else {
 				// I'd also rather not have to calculate the string
@@ -1005,7 +1005,7 @@ float GetIniFloat(const wchar_t *section, const wchar_t *key, float def, bool *f
 	if (GetIniString(section, key, 0, val, 32)) {
 		if (swscanf_s(val, L"%f%n", &ret, &len) != 1 || len != wcslen(val)) {
 			wstring ini_namespace = ini_sections[section].ini_namespace;
-			IniWarning("[%ls][%ls]: Floating point parse error: %S=%S\n", ini_namespace.c_str(), section, key, val);
+			IniWarning("Floating point parse error: %S=%S\n - [%ls] @ [%ls]\n", key, val, section, ini_namespace.c_str());
 			ret = def;
 		} else {
 			if (found)
@@ -1031,7 +1031,7 @@ int GetIniInt(const wchar_t *section, const wchar_t *key, int def, bool *found, 
 		if (swscanf_s(val, L"%d%n", &ret, &len) != 1 || len != wcslen(val)) {
 			if (warn) {
 				wstring ini_namespace = ini_sections[section].ini_namespace;
-				IniWarning("[%ls][%ls]: Integer parse error: %S=%S\n", ini_namespace.c_str(), section, key, val);
+				IniWarning("Integer parse error: %S=%S\n - [%ls] @ [%ls]\n", key, val, section, ini_namespace.c_str());
 			}
 			ret = def;
 		} else {
@@ -1068,7 +1068,7 @@ bool GetIniBool(const wchar_t *section, const wchar_t *key, bool def, bool *foun
 
 		if (warn) {
 			wstring ini_namespace = ini_sections[section].ini_namespace;
-			IniWarning("[%ls][%ls]: Boolean parse error: %S=%S\n", ini_namespace.c_str(), section, key, val);
+			IniWarning("Boolean parse error: %S=%S\n - [%ls] @ [%ls]\n", key, val, section, ini_namespace.c_str());
 			ret = def;
 		}
 	}
@@ -1088,7 +1088,7 @@ static UINT64 GetIniHash(const wchar_t *section, const wchar_t *key, UINT64 def,
 	if (GetIniString(section, key, NULL, &val)) {
 		if (sscanf_s(val.c_str(), "%16llx%n", &ret, &len) != 1 || len != val.length()) {
 			wstring ini_namespace = ini_sections[section].ini_namespace;
-			IniWarning("[%ls][%ls]: Hash parse error: %S=%s\n", ini_namespace.c_str(), section, key, val.c_str());
+			IniWarning("Hash parse error: %S=%s\n - [%ls] @ [%ls]\n", key, val.c_str(), section, ini_namespace.c_str());
 			ret = def;
 		} else {
 			if (found)
@@ -1112,7 +1112,7 @@ static int GetIniHexString(const wchar_t *section, const wchar_t *key, int def, 
 	if (GetIniString(section, key, NULL, &val)) {
 		if (sscanf_s(val.c_str(), "%x%n", &ret, &len) != 1 || len != val.length()) {
 			wstring ini_namespace = ini_sections[section].ini_namespace;
-			IniWarning("[%ls][%ls]: Hex string parse error: %S=%s\n", ini_namespace.c_str(), section, key, val.c_str());
+			IniWarning("Hex string parse error: %S=%s\n - [%ls] @ [%ls]\n", key, val.c_str(), section, ini_namespace.c_str());
 			ret = def;
 		} else {
 			if (found)
@@ -1163,7 +1163,7 @@ static int GetIniEnum(const wchar_t *section, const wchar_t *key, int def, bool 
 				*found = true;
 			LogInfo("  %S=%S\n", key, val);
 		} catch (EnumParseError) {
-			IniWarning("[%ls]: Unrecognised Enum: %S=%S\n", section, key, val);
+			IniWarning("Unrecognised Enum: %S=%S\n - [%ls]\n", key, val, section);
 		}
 	}
 
@@ -1191,7 +1191,7 @@ T GetIniEnumClass(const wchar_t *section, const wchar_t *key, T def, bool *found
 				*found = tmp_found;
 			LogInfo("  %S=%S\n", key, val);
 		} else {
-			IniWarning("[%ls]: Unknown Enum: %S=%S\n", section, key, val);
+			IniWarning("Unknown Enum: %S=%S\n - [%ls]\n", key, val, section);
 		}
 	}
 
@@ -1224,7 +1224,7 @@ T GetIniEnumClass(const wchar_t *section, const wchar_t *key, T def, bool *found
 				*found = tmp_found;
 			LogInfo("  %S=%s\n", key, val.c_str());
 		} else {
-			IniWarning("[%ls]: Unknown Enum: %S=%s\n", section, key, val.c_str());
+			IniWarning("Unknown Enum: %S=%s\n - [%ls]\n", key, val.c_str(), section);
 		}
 	}
 
@@ -1345,7 +1345,7 @@ static void ParseIncludedIniFiles()
 				// This is not a strong protection against including the same file multiple times,
 				// but it is intended to ensure that this do while loop will eventually terminate.
 				if (seen.count(rel_path)) {
-					IniWarning("[%ls] File included multiple times: %S\n", section_id, rel_path.c_str());
+					IniWarning("File included multiple times: %S\n - [%ls]\n", rel_path.c_str(), section_id);
 					continue;
 				}
 				seen.insert(rel_path);
@@ -1360,7 +1360,7 @@ static void ParseIncludedIniFiles()
 				} else if (!wcscmp(key->c_str(), L"user_config")) {
 					// Handled below
 				} else {
-					IniWarning("[%ls] Unrecognised entry: %S=%S\n", section_id, key->c_str(), rel_path.c_str());
+					IniWarning("Unrecognised entry: %S=%S\n - [%ls]\n", key->c_str(), rel_path.c_str(), section_id);
 				}
 			}
 		}
@@ -1395,8 +1395,7 @@ static void RegisterPresetKeyBindings()
 		keys = GetIniStringMultipleKeys(id, L"Key");
 		back = GetIniStringMultipleKeys(id, L"Back");
 		if (keys.empty() && back.empty()) {
-			wstring ini_namespace = ini_sections[id].ini_namespace;
-			IniWarning("[%ls][%ls]: missing Key=\n", ini_namespace.c_str(), id);
+			IniWarning("Missing Key=\n - [%ls]\n", id);
 			continue;
 		}
 
@@ -1652,13 +1651,13 @@ static void ParseResourceInitialData(CustomResource *custom_resource, const wcha
 		case CustomResourceType::RAW_BUFFER:
 			break;
 		default:
-			IniWarning("[%ls] Initial data currently only supported on buffers\n", section);
+			IniWarning("Initial data currently only supported on buffers\n - [%ls]\n", section);
 			// TODO: Support Textures as well (remember to fill out row/depth pitch)
 			return;
 	}
 
 	if (!custom_resource->filename.empty()) {
-		IniWarning("[%ls] Initial data and filename cannot be used together\n", section);
+		IniWarning("Initial data and filename cannot be used together\n - [%ls]\n", section);
 		return;
 	}
 
@@ -1772,7 +1771,7 @@ static void ParseResourceInitialData(CustomResource *custom_resource, const wcha
 	// TODO: case DXGI_FORMAT_R1_UNORM:
 
 	default:
-		IniWarning("[%ls] Unsupported format %s for specifying initial data\n", section, token.c_str());
+		IniWarning("Unsupported format %s for specifying initial data\n - [%ls]\n", token.c_str(), section);
 		return;
 	}
 }
@@ -1836,7 +1835,7 @@ static void ParseResourceSections()
 		if (GetIniString(i->first.c_str(), L"format", 0, setting, MAX_PATH)) {
 			custom_resource->override_format = ParseFormatString(setting, true);
 			if (custom_resource->override_format == (DXGI_FORMAT)-1) {
-				IniWarning("[%S] Unknown format \"%S\"\n", i->first.c_str(), setting);
+				IniWarning("Unknown format \"%S\"\n - [%S]\n", setting, i->first.c_str());
 			} else {
 				LogInfo("  format=%s\n", TexFormatStr(custom_resource->override_format));
 			}
@@ -1971,7 +1970,7 @@ static void ParseCommandList(const wchar_t *id,
 				// whitelisted entries*, so check for
 				// duplicates here:
 				if (whitelisted_keys.count(key->c_str())) {
-					IniWarningW(L"[%ls] Duplicate non-command list key found: %ls\n", id, key->c_str());
+					IniWarningW(L"Duplicate non-command list key found: %ls\n - [%ls]\n", key->c_str(), id);
 				}
 				whitelisted_keys.insert(key->c_str());
 
@@ -2025,7 +2024,7 @@ static void ParseCommandList(const wchar_t *id,
 			continue;
 		}
 
-		IniWarning("[%ls][%ls] Unrecognised entry: %S\n", entry->ini_namespace.c_str(), id, raw_line->c_str());
+		IniWarning("Unrecognised entry: %S\n - [%ls] @ [%ls]\n", raw_line->c_str(), id, entry->ini_namespace.c_str());
 	}
 
 	// Don't need the scope objects once parsing is complete. If all
@@ -2034,7 +2033,7 @@ static void ParseCommandList(const wchar_t *id,
 
 
 	if (std::distance(begin(scope), end(scope)) != 1) {
-		IniWarning("[%ls] scope unbalanced\n", id);
+		IniWarning("Scope unbalanced\n - [%ls]\n", id);
 	}
 
 	pre_command_list->scope = NULL;
@@ -2122,7 +2121,7 @@ static void ParseConstantsSection()
 		name = name_pos;
 
 		if (!valid_variable_name(name)) {
-			IniWarning("[%ls][Constants] Illegal global variable name: \"%S\"\n", entry->ini_namespace.c_str(), name.c_str());
+			IniWarning("Illegal global variable name: \"%S\"\n - [Constants] @ [%ls]\n", name.c_str(), entry->ini_namespace.c_str());
 			continue;
 		}
 
@@ -2135,14 +2134,14 @@ static void ParseConstantsSection()
 		fval = 0.0f;
 		if (!val->empty()) {
 			if (swscanf_s(val->c_str(), L"%f%n", &fval, &len) != 1 || len != val->length()) {
-				IniWarning("[%ls][Constants] Floating point parse error: %S=%S\n", entry->ini_namespace.c_str(), key->c_str(), val->c_str());
+				IniWarning("Floating point parse error: %S=%S\n - [Constants] @ [%ls]\n", key->c_str(), val->c_str(), entry->ini_namespace.c_str());
 				continue;
 			}
 		}
 
 		inserted = command_list_globals.emplace(name, CommandListVariable{name, fval, flags});
 		if (!inserted.second) {
-			IniWarning("[%ls][Constants] Redeclaration of %S\n", entry->ini_namespace.c_str(), name.c_str());
+			IniWarning("Redeclaration of %S\n - [Constants] @ [%ls]\n", name.c_str(), entry->ini_namespace.c_str());
 			continue;
 		}
 
@@ -2307,7 +2306,7 @@ static void ParseShaderOverrideSections()
 
 		hash = GetIniHash(id, L"Hash", 0, &found);
 		if (!found) {
-			IniWarning("[%S] missing Hash=\n", id);
+			IniWarning("Section missing Hash=\n - [%S]\n", id);
 			continue;
 		}
 
@@ -2416,7 +2415,7 @@ static bool parse_shader_regex_section_main(const std::wstring *section_id, Shad
 	std::vector<std::string> items;
 
 	if (!GetIniStringAndLog(section_id->c_str(), L"shader_model", NULL, &setting)) {
-		IniWarning("[%S] missing shader_model\n", section_id->c_str());
+		IniWarning("RegEx section missing shader_model\n - [%S]\n", section_id->c_str());
 		return false;
 	}
 	regex_group->shader_models = vec_to_set(split_string(&setting, ' '));
@@ -2466,7 +2465,7 @@ static bool parse_shader_regex_section_pattern(const std::wstring *section_id, c
 		return false;
 
 	if (regex_pattern->named_group_overlaps(regex_group->temp_regs)) {
-		IniWarning("[%S] Named capture group overlaps with temp regs!\n", section_id->c_str());
+		IniWarning("Named capture group overlaps with temp regs!\n - [%S]\n", section_id->c_str());
 		return false;
 	}
 
@@ -2511,7 +2510,7 @@ static bool parse_shader_regex_section_replace(const std::wstring *section_id, c
 	try {
 		regex_pattern = &regex_group->patterns.at(*pattern_id);
 	} catch (std::out_of_range) {
-		IniWarning("Missing corresponding pattern section [%S]\n", section_id->c_str());
+		IniWarning("Missing corresponding pattern section\n - [%S]\n", section_id->c_str());
 		return false;
 	}
 
@@ -2546,7 +2545,7 @@ static ShaderRegexGroup* get_regex_group(std::wstring *regex_id, bool allow_crea
 	try {
 		return &shader_regex_groups.at(*regex_id);
 	} catch (std::out_of_range) {
-		IniWarning("Missing [%S] section\n", regex_id->c_str());
+		IniWarning("Missing section\n - [%S]\n", regex_id->c_str());
 		return NULL;
 	}
 }
@@ -2636,7 +2635,7 @@ static void ParseShaderRegexSections()
 		// We delete the whole regex data structure if any of the subsections
 		// are not present, or fail to parse or compile so that we don't end up
 		// applying an incomplete regex to any shaders.
-		IniWarning("[%S] Disabling entire shader regex group \n", subsection_names[0].c_str());
+		IniWarning("Disabling entire shader regex group\n - [%S]\n", subsection_names[0].c_str());
 		delete_regex_group(&subsection_names[0]);
 	}
 
@@ -2876,7 +2875,7 @@ float GetConstantIniVariable(const wchar_t* section, const wchar_t* key, float d
 				if (ret != def)
 					*found = true;
 				else
-					IniWarning("[%ls][%ls]: Constant variable %s is not defined!\n", ini_namespace.c_str(), section, tmp.c_str());
+					IniWarning("Constant variable %s is not defined!\n - [%ls] @ [%ls]\n", tmp.c_str(), section, ini_namespace.c_str());
 			}
 		}
 	}
@@ -3128,7 +3127,7 @@ static void parse_texture_override_fuzzy_match(const wchar_t *section)
 		parse_fuzzy_numeric_match_expression(setting, &fuzzy->SampleDesc_Quality);
 
 	if (!fuzzy->update_types_matched()) {
-		IniWarning("Section [%S] can never match any resources\n", section);
+		IniWarning("Section can never match any resources\n - [%S]\n", section);
 		delete fuzzy;
 		return;
 	}
@@ -3203,12 +3202,12 @@ static void ParseTextureOverrideSections()
 				continue;
 			}
 
-			IniWarning("[%S] Missing Hash= or valid match options\n", id);
+			IniWarning("Section missing Hash= or valid match options\n - [%S]\n", id);
 			continue;
 		}
 
 		if (texture_override_section_has_fuzzy_match_keys(id))
-			IniWarning("[%S] Cannot use hash= and match options together!\n", id);
+			IniWarning("Cannot use hash= and match options together!\n - [%S]\n", id);
 
 		G->mTextureOverrideMap[hash].emplace_back(); // C++ gotcha: invalidates pointers into the vector
 		override = &G->mTextureOverrideMap[hash].back();
@@ -3778,7 +3777,7 @@ static void ParseTopology(CustomShader *shader, const wchar_t *section)
 
 	}
 
-	IniWarning("[%ls] Unrecognised primitive topology=%S\n", section, val);
+	IniWarning("Unrecognised primitive topology=%S\n - [%ls]\n", val, section);
 }
 
 static void ParseSamplerState(CustomShader *shader, const wchar_t *section)
@@ -3832,7 +3831,7 @@ static void ParseSamplerState(CustomShader *shader, const wchar_t *section)
 			return;
 		}
 
-		IniWarning("[%ls] Unknown sampler \"%S\"\n", section, setting);
+		IniWarning("Unknown sampler \"%S\"\n - [%ls]\n", setting, section);
 	}
 }
 
@@ -4318,11 +4317,11 @@ void LoadConfigFile()
 	G->decompiler_settings.StereoParamsReg = G->StereoParamsReg;
 	G->decompiler_settings.IniParamsReg = G->IniParamsReg;
 	if (G->StereoParamsReg >= D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT) {
-		IniWarning("[%ls] stereo_params=%i out of range\n", INI_FILENAME, G->StereoParamsReg);
+		IniWarning("Option stereo_params=%i out of range\n - [%ls]\n", G->StereoParamsReg, INI_FILENAME);
 		G->StereoParamsReg = -1;
 	}
 	if (G->IniParamsReg >= D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT) {
-		IniWarning("[%ls] ini_params=%i out of range\n", INI_FILENAME, G->IniParamsReg);
+		IniWarning("Option ini_params=%i out of range\n - [%ls]\n", G->IniParamsReg, INI_FILENAME);
 		G->IniParamsReg = -1;
 	}
 
