@@ -559,6 +559,8 @@ static void ParseIniKeyValLine(wstring *wline, wstring *section,
 	section_vector->emplace_back(key, val, *wline, *ini_namespace);
 }
 
+static std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+
 static void ParseIniStream(istream *stream, const wstring *_ini_namespace)
 {
 	string aline;
@@ -582,7 +584,7 @@ static void ParseIniStream(istream *stream, const wstring *_ini_namespace)
 		// APIs. If we assume the d3dx.ini is always ASCII we could
 		// drop this, but that would require us to change a great many
 		// types throughout 3DMigoto, so leave that for another day.
-		wline = wstring(aline.begin(), aline.end());
+		wline = converter.from_bytes(aline);
 
 		// Strip preceding and trailing whitespace:
 		first = wline.find_first_not_of(L" \t");
@@ -4125,6 +4127,7 @@ static void warn_of_conflicting_d3dx(wchar_t *dll_ini_path)
 
 void LoadConfigFile()
 {
+	std::setlocale(LC_ALL, ".utf8");
 	wchar_t iniFile[MAX_PATH], logFilename[MAX_PATH];
 	wchar_t setting[MAX_PATH];
 
